@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CatSprite-dev/chirpy/internal/auth"
 	"github.com/CatSprite-dev/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -21,8 +22,7 @@ type Chirp struct {
 
 func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserId uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 	type returnVals struct {
 		Chirp
@@ -36,6 +36,18 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't get token", err)
+		return
+	}
+
+	userId, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Autorized error", err)
+		return
+	}
+
 	validChirp, err := validateChirp(params.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err.Error(), err)
@@ -43,7 +55,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 
 	chrip, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   validChirp,
-		UserID: params.UserId,
+		UserID: userId,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create chirp", err)
